@@ -1,0 +1,18 @@
+# 对外汉语智能发音纠错系统 — Phase 0 演示框架依赖
+
+# Web 框架（录音 + UI 一站式方案）
+gradio>=4.0.0
+
+# 音频处理
+librosa>=0.10.0
+soundfile>=0.12.0
+
+# 声学特征提取（Praat Python 接口）
+praat-parselmouth>=0.4.0
+
+# 数值计算
+numpy>=1.24.0
+scipy>=1.10.0
+
+# 音频文件读写（替代 soundfile 的备选）
+# pydub>=0.25.0
