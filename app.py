@@ -2,7 +2,6 @@
 对外汉语智能发音纠错系统 — Phase 0 演示框架
 ==============================================
 技术栈：Gradio + librosa + parselmouth
-目标：1 周内跑通"录音 → 评测 → 诊断"闭环，向导师演示
 
 运行方式：
     cd demo_project
@@ -17,21 +16,22 @@ import gradio as gr
 import numpy as np
 import os
 import tempfile
+from pathlib import Path
 
-from engine.evaluator import evaluate_pronunciation
+from engine.evaluator import evaluate_pronunciation, parse_target_word
 from engine.diagnosis import diagnose_errors
 from engine.acoustic_features import extract_f0_curve
 
 # ── 练习字表 ──
-# 按偏误类型分组，每组的第一个是标准音，其余是易混淆音
+# 按偏误类型分组
 PRACTICE_WORDS = {
-    "翘舌音 (zh/ch/sh)": ["知(zhī)", "吃(chī)", "是(shì)"],
-    "平舌音 (z/c/s)": ["资(zī)", "疵(cī)", "四(sì)"],
-    "舌面音 (j/q/x)": ["机(jī)", "七(qī)", "西(xī)"],
-    "圆唇音 (ü)": ["绿(lǜ)", "女(nǚ)", "鱼(yú)"],
-    "送气音 (p/t/k)": ["跑(pǎo)", "他(tā)", "看(kàn)"],
-    "鼻韵尾 (-n/-ng)": ["慢(màn)", "忙(máng)", "金(jīn)", "京(jīng)"],
-    "声调对比 (二声vs三声)": ["麻(má)", "马(mǎ)", "国(guó)", "果(guǒ)"],
+    "翘舌音 (zh/ch/sh)": ["知(zhi1)", "吃(chi1)", "是(shi4)"],
+    "平舌音 (z/c/s)": ["资(zi1)", "疵(ci1)", "四(si4)"],
+    "舌面音 (j/q/x)": ["机(ji1)", "七(qi1)", "西(xi1)"],
+    "圆唇音 (ü)": ["绿(lv4)", "女(nv3)", "鱼(yv2)"],
+    "送气音 (p/t/k)": ["跑(pao3)", "他(ta1)", "看(kan4)"],
+    "鼻韵尾 (-n/-ng)": ["慢(man4)", "忙(mang2)", "金(jin1)", "京(jing1)"],
+    "声调对比 (二声vs三声)": ["麻(ma2)", "马(ma3)", "国(guo2)", "果(guo3)"],
 }
 
 # 扁平化为下拉菜单选项
@@ -39,6 +39,25 @@ ALL_WORDS = []
 for group, words in PRACTICE_WORDS.items():
     for w in words:
         ALL_WORDS.append(f"{w}")
+
+REFERENCE_AUDIO_DIR = Path(__file__).resolve().parent / "example"
+
+
+def load_reference_audio(target_word):
+    """根据目标字加载对应的标准发音 WAV 文件。"""
+    target_info = parse_target_word(target_word)
+    if not target_info:
+        return None, "无法识别目标字，暂时无法加载标准发音。"
+
+    pinyin = target_info.get("pinyin", "")
+    if not pinyin:
+        return None, "该目标字没有可用的拼音信息。"
+
+    audio_path = REFERENCE_AUDIO_DIR / f"{pinyin}.wav"
+    if not audio_path.is_file():
+        return None, f"暂无标准发音音频：{audio_path.name}"
+
+    return str(audio_path), f"已加载标准发音：{pinyin}"
 
 
 # ── 样式定制 ──
@@ -209,8 +228,26 @@ def create_demo():
                 target_word = gr.Dropdown(
                     choices=ALL_WORDS,
                     label="选择练习字",
-                    value="知(zhī)",
+                    value="知(zhi1)",
                     interactive=True,
+                )
+
+                reference_btn = gr.Button(
+                    "播放正确发音",
+                    variant="secondary",
+                )
+
+                reference_audio = gr.Audio(
+                    value=str(REFERENCE_AUDIO_DIR / "zhi1.wav"),
+                    label="标准发音",
+                    type="filepath",
+                    interactive=False,
+                    autoplay=False,
+                    elem_id="reference-audio",
+                )
+
+                reference_status = gr.Markdown(
+                    "已加载标准发音：zhi1"
                 )
 
                 audio_input = gr.Audio(
@@ -298,6 +335,29 @@ def create_demo():
         """)
 
         # ── 事件绑定 ──
+        target_word.change(
+            fn=load_reference_audio,
+            inputs=[target_word],
+            outputs=[reference_audio, reference_status],
+        )
+
+        reference_btn.click(
+            fn=None,
+            inputs=None,
+            outputs=None,
+            js="""
+            () => {
+                const audio = document.querySelector("#reference-audio audio");
+                if (!audio) return;
+                audio.currentTime = 0;
+                const playPromise = audio.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch(() => {});
+                }
+            }
+            """,
+        )
+
         submit_btn.click(
             fn=process_audio,
             inputs=[target_word, audio_input],
@@ -320,9 +380,9 @@ if __name__ == "__main__":
     # share=False: 仅本地访问，适合校内开发调试
     # share=True: 生成公网 Gradio 链接，导师可远程查看
     demo.launch(
-        server_name="0.0.0.0",
+        server_name="127.0.0.1",
         server_port=7860,
-        share=False,
+        share=True,
         css=CUSTOM_CSS,
         theme=gr.themes.Soft(primary_hue="red"),
     )

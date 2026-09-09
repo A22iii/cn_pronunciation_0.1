@@ -106,6 +106,7 @@ def extract_f0_statistics(y, sr):
         return None
 
     # 线性拟合求斜率 —— 判断声调调理（升/降/平）
+    # TO DO 第三声需要求两次斜率
     x = np.arange(len(valid_f0))
     slope = np.polyfit(x, valid_f0, 1)[0] if len(valid_f0) > 2 else 0
 
@@ -115,7 +116,7 @@ def extract_f0_statistics(y, sr):
         "f0_min": float(np.min(valid_f0)),
         "f0_max": float(np.max(valid_f0)),
         "f0_slope": float(slope),  
-        "f0_std": float(np.std(valid_f0)),
+        "f0_std": float(np.std(valid_f0)),      # 音高变化幅度
     }
 
 
@@ -134,11 +135,12 @@ def extract_formants(y, sr, n_formants=3):
     try:
         sound = parselmouth.Sound(y, sampling_frequency=sr)
         # LPC 阶数：经验上 2 * (n_formants + 2) 效果较好
+        # 共振峰过少，可能漏掉或合并真是共振峰，过多容易过拟合噪音，产生虚假共振峰
         formant = sound.to_formant_burg(
-            time_step=0.01,
+            time_step=0.01,             # 每隔10ms分析一次
             max_number_of_formants=5,
-            maximum_formant=5000,  # 女声/儿童用 5500
-            window_length=0.025,
+            maximum_formant=5000,       # 女声/儿童用 5500
+            window_length=0.025,        # 分析窗口为25ms
         )
 
         # 在时间中点提取共振峰
@@ -168,13 +170,15 @@ def estimate_vot(y, sr):
 
     try:
         # 用短时能量检测除阻点
-        frame_length = int(0.005 * sr)  # 5ms 帧
+        frame_length = int(0.005 * sr)  # 5ms 内的采样点数
         hop_length = int(0.001 * sr)    # 1ms 跳
 
-        energy = np.array([
-            np.sum(y[i:i+frame_length]**2)
-            for i in range(0, len(y) - frame_length, hop_length)
-        ])
+        energy_values = []
+        for i in range(0, len(y) - frame_length, hop_length):
+            value = np.sum(y[i:(i + frame_length)] ** 2)
+            energy_values.append(value)
+
+        energy = np.array(energy_values)
 
         if len(energy) < 10:
             return None
@@ -187,6 +191,7 @@ def estimate_vot(y, sr):
         burst_sample = burst_frame * hop_length
         remaining = y[burst_sample:]
 
+        # 如果剩余时间不足 2ms，信息不足， 无法判断 VOT 
         if len(remaining) < int(0.002 * sr):
             return None
 
@@ -195,7 +200,7 @@ def estimate_vot(y, sr):
             segment = remaining[i:i + int(0.01 * sr)]
             if len(segment) < int(0.01 * sr):
                 break
-            # 归一化自相关
+            # 归一化自相关，检测周期性
             autocorr = np.correlate(segment, segment, mode='full')
             autocorr = autocorr[len(autocorr)//2:]
             if len(autocorr) < 2:
