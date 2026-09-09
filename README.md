@@ -40,9 +40,3 @@ demo_project/
 | rounding_missing | ü → i/u（圆唇缺失） |
 | nasal_final_dropped | -n/-ng 脱落（软腭未降） |
 | tone2_3_confusion | 二声/三声混淆 |
-
-## 后续计划
-
-- Phase 1: 迁移至 FastAPI + React，接入实验室 TDNN chain 模型
-- Phase 2: 扩充至 30+ 偏误规则，加入 3D 发音动画
-- Phase 3: 多母语支持，句子级训练
