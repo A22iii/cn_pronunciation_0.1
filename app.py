@@ -3,13 +3,6 @@
 ==============================================
 技术栈：Gradio + librosa + parselmouth
 
-运行方式：
-    cd demo_project
-    pip install -r requirements.txt
-    python app.py
-
-然后浏览器打开 http://localhost:7860
-
 """
 
 import gradio as gr
@@ -377,8 +370,6 @@ def create_demo():
 # ── 入口 ──
 if __name__ == "__main__":
     demo = create_demo()
-    # share=False: 仅本地访问，适合校内开发调试
-    # share=True: 生成公网 Gradio 链接，导师可远程查看
     demo.launch(
         server_name="127.0.0.1",
         server_port=7860,
